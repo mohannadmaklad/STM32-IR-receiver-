@@ -14,23 +14,14 @@ int brightness = 0x1;
 
 int main()
 {
-	
   // CLOCK_setCoreClock8MHZ();
   TIMER_initTickTimer();
 	IR_init();
-	TIMER_initPwmTimer();
-	TIMER_initIRsendingTimer();
-	TIMER_enablePWM();
-	
 	TIMER_startTimer(USPERTICK ); //50 uS timer interrupt, OS
-	
-	
 	
 	for(ever)
 	{
-			/*DO NOTHING*/
-		//IR_sendNECCode(0xAE51FF00);
-
+		//do nothing
 	}
 	return 0;
 }
@@ -40,22 +31,10 @@ void TIM2_IRQHandler(void)
 	TIMER_updateTimer();
 	
 	/*DO YOUR STUFF HERE*/
-	IR_recvUpdate();
+	IR_recvUpdate(); //updates the state machine
 
-	if(IR_validCodeDetected())
+	if(IR_validCodeDetected()) //check for a new code
 	{
- 		 d = IR_getRecievedCode();
-		//if(d == 0xA659FF00)
-		if(d == 0xAE51FF00)
-		{
-			//TIM3->CCR1 = --brightness;
-			TIMER_disablePWM();
-		} 
-		else if(d == 0xA659FF00)
-		{
-			//TIM3->CCR1 = ++brightness;
-			TIMER_enablePWM();
-		}
-
+ 		 d = IR_getRecievedCode(); //if there, get it
 	}
 }

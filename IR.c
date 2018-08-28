@@ -1,7 +1,5 @@
 #include "IR.h"
 #include "in.h"
-#include "gpio.h"
-#include "timer.h"
 
 #define MARK        0
 #define SPACE       1
@@ -24,7 +22,7 @@ typedef enum
 
 
 /*Sony protocol Parameters*/
-#define SONY_numOfBits          50
+#define SONY_numOfBits          50		//////!!////////
 #define SONY_HeaderPeriod       2400
 #define SONY_OneMarkPeriod      1200
 #define SONY_ZeroMarkPeriod     600
@@ -66,20 +64,9 @@ volatile tBOOL IRinput; //polling the IR input pin
 volatile tBOOL deb;
 
 
-/*------------------------------------------------------------------------------------*/
-/*-------------------------------- Sending Paramaters --------------------------------*/
-/*------------------------------------------------------------------------------------*/
-unsigned int sendTimer;
-unsigned char currentBit;
-
-
 
 /*Private Interface*/
 
-/*
-    INPUTS: A POINTER TO THE ARRAY OF MEASURED PERIODS
-    OUTPUTS: THE RESULTING CODE (1s AND 0s)
-*/
 void        IR_resetRecieveData(void);
 tBOOL       IR_checkOverflow(void);
 tBOOL 			IR_NECmatchHeaderMark(char index);
@@ -89,12 +76,7 @@ tBOOL 			IR_NECmatchOneSpace(char index);
 tBOOL 			IR_NECmatchZeroSpace(char index);
 tBOOL   	  IR_NECdecode(unsigned int* periods);
 
-void 				IR_sendHeader();
-void 				IR_sendBit(tBOOL bit);
-
-
 /*Private interface definitions*/
-
 void        IR_resetRecieveData(void)
 {
     newCodeFlag  = 0;        //no received code or not complete
@@ -190,36 +172,7 @@ tBOOL    IR_NECdecode(unsigned int* periods)
 	newCodeFlag = 1;
 	return 1; //success
 }
-/**/
-void 				IR_sendHeader()
-{
-	/*Send the Mark*/
-	TIMER_IRtimerUpdate();
- 	TIMER_startIRsendingTimer(NEC_HeaderMarkPeriod);
-	TIMER_enablePWM();
-	while(IR_TIMER->CNT < TIM3->ARR);
-	
-	/*Send the Space*/
-	TIMER_IRtimerUpdate();
-	TIMER_startIRsendingTimer(NEC_HeaderSpacePeriod);
-	TIMER_disablePWM();
- 	while(IR_TIMER->CNT < TIM3->ARR);
-}
 
-void 				IR_sendBit(tBOOL bit)
-{
-	/*Send the Mark*/
-	TIMER_IRtimerUpdate();
-	TIMER_startIRsendingTimer(NEC_MarkPeriod);
-	TIMER_enablePWM();
-	while(IR_TIMER->CNT < TIM3->ARR);
-	/*Send the Space*/
-	TIMER_IRtimerUpdate();
-	if(bit & 0x1) TIMER_startIRsendingTimer(NEC_OneSpacePeriod);
-	else TIMER_startIRsendingTimer(NEC_ZeroSpacePeriod);
-	TIMER_disablePWM();
-	while(IR_TIMER->CNT < TIM3->ARR); 
-}
 
 /*Public interface definitions*/
 
@@ -351,21 +304,4 @@ tIR_DATA    IR_getRecievedCode(void)
 	return ret;
 }
 /**/
-
-
-
-void	IR_sendNECCode(tIR_DATA hexData)
-{
- 	IR_sendHeader();
-	for(currentBit = 0 ; currentBit < NEC_numOfBits ; currentBit++)
-	{
-		IR_sendBit((hexData & (0x1 << currentBit)) >> currentBit) ;
-	}
-  }
-
-
-
-
-
-
 

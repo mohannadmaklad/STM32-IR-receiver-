@@ -14,9 +14,6 @@ void        IR_recvUpdate(void);                //periodic task
 tBOOL       IR_validCodeDetected(void);
 tIR_DATA    IR_getRecievedCode(void);
 
-/*Sending functions*/
-void				IR_sendNECCode(tIR_DATA hexData);
-
 
 #endif // IR_H_INCLUDED
 
