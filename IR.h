@@ -4,15 +4,18 @@
 /*Includes*/
 #include "type.h"
 
-#define USPERTICK 	2
+#define USPERTICK 	25
 
 
 /*Public Interface*/
+/*Receiving functions*/
 void        IR_init(void);
-void        IR_update(void);                //periodic task
+void        IR_recvUpdate(void);                //periodic task
 tBOOL       IR_validCodeDetected(void);
 tIR_DATA    IR_getRecievedCode(void);
 
+/*Sending functions*/
+void				IR_sendNECCode(tIR_DATA hexData);
 
 
 #endif // IR_H_INCLUDED

@@ -311,7 +311,7 @@
           </ArmAdsMisc>
           <Cads>
             <interw>1</interw>
-            <Optim>4</Optim>
+            <Optim>0</Optim>
             <oTime>0</oTime>
             <SplitLS>0</SplitLS>
             <OneElfS>1</OneElfS>
@@ -386,6 +386,11 @@
               <FilePath>.\driver.c</FilePath>
             </File>
             <File>
+              <FileName>IR.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\IR.c</FilePath>
+            </File>
+            <File>
               <FileName>main.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\main.c</FilePath>
@@ -399,11 +404,6 @@
               <FileName>clock.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\clock.c</FilePath>
-            </File>
-            <File>
-              <FileName>IR.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>.\IR.c</FilePath>
             </File>
             <File>
               <FileName>in.c</FileName>

@@ -24,7 +24,9 @@ In input mode (MODE[1:0]=00):
 #define floatingInput  ((uint32_t) 0x4)
 #define pulledInput    ((uint32_t) 0x8)
 
-#define pushPullOutput ((uint32_t) 0x1)
+#define pushPullOutput 		((uint32_t) 0x1)
+#define AF_pushPullOutput ((uint32_t) 0x9)
+
 
  /*-----------------------------------------------------------------------------------------------------*/
  /*--------------------------------------------- C L O C K ---------------------------------------------*/

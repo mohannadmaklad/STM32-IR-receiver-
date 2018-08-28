@@ -1,6 +1,7 @@
 #include "IR.h"
 #include "in.h"
 #include "gpio.h"
+#include "timer.h"
 
 #define MARK        0
 #define SPACE       1
@@ -44,24 +45,33 @@ typedef enum
 /*State Machine definitions for SONY protocol*/
 typedef enum
 {
-    SONY_IDLE = 0,
-    SONY_MARK,
-    SONY_SPACE,
-    SONY_STOP,
-    SONY_OVERFLOW,
+    IR_IDLE = 0,
+    IR_MARK,
+    IR_SPACE
 }tIR_STATE;
 
 tIR_STATE currentState;
 
 
 /*Private global variables*/
-tBOOL newCodeFlag;
-tIR_DATA receivedData;
-unsigned int timer;
+/*------------------------------------------------------------------------------------*/
+/*------------------------------- Receiving Paramaters -------------------------------*/
+/*------------------------------------------------------------------------------------*/
+tBOOL newCodeFlag; //1 If a key is pressed and decoded successfully
+tIR_DATA receivedData; //the received data in hexa
+unsigned int recvTimer;
 static char index;
-unsigned int periods[SONY_BufferSize];
-volatile tBOOL IRinput;
+unsigned int periods[NEC_BufferSize+2]; //2 more places to handle overflow cases
+volatile tBOOL IRinput; //polling the IR input pin
 volatile tBOOL deb;
+
+
+/*------------------------------------------------------------------------------------*/
+/*-------------------------------- Sending Paramaters --------------------------------*/
+/*------------------------------------------------------------------------------------*/
+unsigned int sendTimer;
+unsigned char currentBit;
+
 
 
 /*Private Interface*/
@@ -79,19 +89,23 @@ tBOOL 			IR_NECmatchOneSpace(char index);
 tBOOL 			IR_NECmatchZeroSpace(char index);
 tBOOL   	  IR_NECdecode(unsigned int* periods);
 
+void 				IR_sendHeader();
+void 				IR_sendBit(tBOOL bit);
+
+
 /*Private interface definitions*/
 
 void        IR_resetRecieveData(void)
 {
     newCodeFlag  = 0;        //no received code or not complete
     receivedData = 0;   //no decoded data
-    timer = 0;          //reset the timer
+    recvTimer  = 0;          //reset the timer
     index = 0;
 }
 
 tBOOL       IR_checkOverflow(void)
 {
-    return (index >= SONY_BufferSize);
+    return (index > (NEC_BufferSize+1));
 }
 
 /**/
@@ -176,7 +190,36 @@ tBOOL    IR_NECdecode(unsigned int* periods)
 	newCodeFlag = 1;
 	return 1; //success
 }
+/**/
+void 				IR_sendHeader()
+{
+	/*Send the Mark*/
+	TIMER_IRtimerUpdate();
+ 	TIMER_startIRsendingTimer(NEC_HeaderMarkPeriod);
+	TIMER_enablePWM();
+	while(IR_TIMER->CNT < TIM3->ARR);
+	
+	/*Send the Space*/
+	TIMER_IRtimerUpdate();
+	TIMER_startIRsendingTimer(NEC_HeaderSpacePeriod);
+	TIMER_disablePWM();
+ 	while(IR_TIMER->CNT < TIM3->ARR);
+}
 
+void 				IR_sendBit(tBOOL bit)
+{
+	/*Send the Mark*/
+	TIMER_IRtimerUpdate();
+	TIMER_startIRsendingTimer(NEC_MarkPeriod);
+	TIMER_enablePWM();
+	while(IR_TIMER->CNT < TIM3->ARR);
+	/*Send the Space*/
+	TIMER_IRtimerUpdate();
+	if(bit & 0x1) TIMER_startIRsendingTimer(NEC_OneSpacePeriod);
+	else TIMER_startIRsendingTimer(NEC_ZeroSpacePeriod);
+	TIMER_disablePWM();
+	while(IR_TIMER->CNT < TIM3->ARR); 
+}
 
 /*Public interface definitions*/
 
@@ -185,7 +228,7 @@ void        IR_init(void)
     /*config GPIO input pin*/
 		IN_initInputPort(); 
     /*start in IDLE state*/
-    tIR_STATE currentState = SONY_IDLE;
+    tIR_STATE currentState = IR_IDLE;
     IR_resetRecieveData();
 }
 
@@ -194,92 +237,96 @@ void        IR_init(void)
  *  DESCRIPTION : Checks the current state and Updates the received periods array if it's in any of the receiving states
  *                if the receiving state is IDLE, it just increases the timer to measure the gap
 */
-void        IR_update(void)
+void        IR_recvUpdate(void)
 {
-	IRinput = IN_readIRinput() ;
+		IRinput = IN_readIRinput() ;
 
-	
-/*	
-		if(IRinput == 0 && deb == 0 ) IRinput = 0;
-		else IRinput = 1;
-*/
     /*Increment the ticks counter*/
-    timer++;
+    recvTimer++;
 
     /*State Machine*/
     switch(currentState)
     {
-        case SONY_IDLE:
-            /*get input and check for a mark && the end of the current gap*/
-						if(timer < GapPeriodTICKS)
-						{
-							timer++;
+        case IR_IDLE:
+						
+						/*get input and check for a mark && the end of the current gap*/
+						if(IRinput == MARK)
+						{ 
+							/*Check for a long gap && old clicks are received*/
+							if(recvTimer < GapPeriodTICKS || (newCodeFlag == 1))
+							{
+								recvTimer = 0;
+							}
+							else
+							{
+								periods[index++] = recvTimer; //store the period of the gap
+								if(IR_checkOverflow())
+								{
+										//shouldn't be here ever
+										//add debug code
+										IR_resetRecieveData();
+										currentState = IR_IDLE;
+								}
+								else
+								{
+										recvTimer = 0;
+										currentState = IR_MARK;
+								}
+							}
 						}
-            else if(IRinput == MARK)
-            {
-                periods[index++] = timer; //store the period of the gap
-                if(IR_checkOverflow())
-                {
-                    //shouldn't be here ever
-                    //add debug code
-                    currentState = SONY_OVERFLOW;
-                }
-                else
-                {
-                    timer = 0;
-                    currentState = SONY_MARK;
-                }
-            }
+					
             break;
 
-        case SONY_MARK:
+        case IR_MARK:
              if(IRinput == SPACE)
             {
-                periods[index++] = timer;
+                periods[index++] = recvTimer;
                 if(IR_checkOverflow())
                 {
-                    currentState = SONY_OVERFLOW;
+                    IR_resetRecieveData();
+										currentState = IR_IDLE;
                 }
                 else
                 {
-                    timer = 0;
-                    currentState = SONY_SPACE;
+                    recvTimer = 0;
+                    currentState = IR_SPACE;
                 }
             }
             break;
 
-        case SONY_SPACE:
+        case IR_SPACE:
             if(IRinput == MARK)
             {
-                periods[index++] = timer;
+                periods[index++] = recvTimer;
                 if(IR_checkOverflow())
                 {
-                    currentState = SONY_OVERFLOW;
+                    IR_resetRecieveData();
+										currentState = IR_IDLE;
                 }
                 else
                 {
-                    timer = 0;
-                    currentState = SONY_MARK;
+                    recvTimer = 0;
+                    currentState = IR_MARK;
                 }
             }
-            else
+            else //check for a long gap
             {
-                if(timer >= GapPeriodTICKS ) //received full packet or stopped in the middle of packet
+                if(recvTimer >= GapPeriodTICKS ) //received full packet or stopped in the middle of packet
                 {
- 									IR_NECdecode(periods);
-									if(index < NEC_BufferSize) {IR_resetRecieveData();currentState = SONY_IDLE;}
-                  else currentState = SONY_STOP;
 									
+									if(index == (NEC_BufferSize+1))//success
+									{
+										/*decode the received data, update receivedData variable and raise newCode flag*/
+										IR_NECdecode(periods); 
+									}
+									else //failed
+									{
+										/*reset and start over again*/
+										IR_resetRecieveData();
+									}
+									currentState = IR_IDLE;
                 }
             }
-            break;
-
-        case SONY_STOP: //a blocking state
-            if(IRinput == MARK) timer = 0;
-            break;
-
-        case SONY_OVERFLOW:
-            IR_resetRecieveData();
             break;
 
     }
@@ -295,14 +342,30 @@ tBOOL       IR_validCodeDetected(void)
 
 tIR_DATA    IR_getRecievedCode(void)
 {
-	
-	/*No more data to return*/
 	/*Reset the routine protocol and start again*/
+	tIR_DATA ret = receivedData;
 	IR_resetRecieveData();
-	currentState = SONY_IDLE;
+	currentState = IR_IDLE;
+	/*No more data to return*/
 	newCodeFlag = 0;
-	return receivedData;
+	return ret;
 }
+/**/
+
+
+
+void	IR_sendNECCode(tIR_DATA hexData)
+{
+ 	IR_sendHeader();
+	for(currentBit = 0 ; currentBit < NEC_numOfBits ; currentBit++)
+	{
+		IR_sendBit((hexData & (0x1 << currentBit)) >> currentBit) ;
+	}
+  }
+
+
+
+
 
 
 
